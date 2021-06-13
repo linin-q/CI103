@@ -1,0 +1,239 @@
+// 云函数入口文件
+const cloud = require('wx-server-sdk')
+
+cloud.init({
+  env:"exchangestation-5g2sutib70371282"
+})
+//连接数据库
+const db = cloud.database()
+// 云函数入口函数
+exports.main = async (event, context) => {
+  // event就是客户端调用云函数传递的参数
+  // data要插入数据库的数据
+  //collectionName 集合名
+  let {data,collectionName}=event;
+  return new Promise((resolve,reject)=>{
+    db.collection(collectionName).add({
+      data
+    }).then(res=>{
+      resolve(res);
+    }).catch(err=>{
+      reject(err);
+    })
+  })
+  
+}
+
+// 云函数入口文件
+const cloud = require('wx-server-sdk')
+
+cloud.init({
+  env="exchangestation-5g2sutib70371282"
+})
+
+// 云函数入口函数
+exports.main = async (event, context) => {
+  // 拿到前端的base64数据
+  let {base64Data}=event;
+  // 将base64转为buffer格式
+  return await cloud.uploadFile({
+    cloudPath:"images/"+Date.now()+'.png',
+    fileContent:Buffer.from(base64Data,"base64"),
+  })
+  
+}
+
+const { find } = require("../../api/api");
+// 通过require引入api文件
+const api=require("../../api/api");
+Page({
+
+  /**
+   * 页面的初始数据
+   */
+  data: {
+    navbar: ['书籍', '生活用品', '其它'],
+    currentTab: 0,
+    List: [],
+    list1:[],
+    list2:[]
+  },
+  navbarTap: function(e){
+    this.setData({
+      currentTab: e.currentTarget.dataset.idx
+    })
+  },
+
+  gethotList(){
+    api.find("books").then(res=>{
+      this.setData({
+        List:res.data
+      })
+    })
+      },
+      gethotList1(){
+        api.find("necessaries").then(res=>{
+          this.setData({
+            List1:res.data
+          })
+        })
+          },
+          gethotList2(){
+            api.find("others").then(res=>{
+              this.setData({
+                List2:res.data
+              })
+            })
+              },
+  /**
+   * 生命周期函数--监听页面加载
+   */
+  onLoad: function (options) {
+    this.gethotList();
+    this.gethotList1();
+    this.gethotList2();
+  },
+
+getuser(event){
+    //调用云函数，获取appid和openid
+    api.callfun('login').then(res=>{
+      //1,点击拒绝授权
+      if(event.detail.errMsg=="getUserInfo:fail auth deny"){
+        wx.showToast({
+          title:'您需要登录，才能使用所有功能',
+          icon:"none"
+        })
+        return false;
+      }
+      // 2,同意授权  res.result里装的是appid和openid
+      if(res.result.appid){
+        // 把登录用户的身份标识存入缓存
+        wx.setStorageSync('appid',res.result.appid);
+        wx.setStorageSync('openid',res.result.openid);
+        //3,执行登录
+        wx.login({});
+        //4,获取用户信息，用户信息存放在event.detail.userInfo中，
+        wx.setStorageSync('userinfo',event.detail.userInfo);
+        //5,把获取到的用户信息更新到userInfo属性当中
+        console.log(event.detail.userInfo)
+        if(event.detail.userInfo!=null){
+        this.setData({
+          isLogin:true,
+          userInfo:event.detail.userInfo
+        })
+      }else{
+        console.log("空")
+      }
+      }
+    })
+  },
+  
+onLoad: function(options) {
+    //当加载这个页面是判断本地缓存中有没有用户数据，有就自动登录
+    // 检查是否登录过期
+    wx.checkSession({
+      success: (res) => {
+        let userinfo=wx.getStorageSync('userinfo');
+        if(userinfo!=null){
+        this.setData({
+          isLogin:true,
+          userInfo:userinfo,
+        })
+      }else{
+        console.log("none")
+      }
+     }
+    })
+     
+
+const db = wx.cloud.database();  //获取到云平台上的数据库
+const _=db.command;
+// 封装1 用来查询数据库的数据
+// collectionName 集合名称
+// where  查询条件
+// skip  跳过几条
+// limit 限制多少条
+const find=function(collectionName,where={},skip=0,limit=20,targetType="click",sort="desc"){
+  return new Promise((resolve,reject)=>{
+    db.collection(collectionName).where(where).skip(skip).limit(limit).orderBy(targetType,sort).get().then(res=>{
+      resolve(res);
+    })
+    .catch(err=>{
+      reject(err);
+    })
+  })
+}
+
+// 封装云函数的调用方法
+// name云函数名
+// data要传递给云函数的数据
+const callfun=function(name,data={}){
+  return new Promise((resolve,reject)=>{
+    wx.cloud.callFunction({
+      name,
+      data
+    }).then(res=>{
+      resolve(res)
+    }).catch(err=>{
+      reject(err);
+    })
+  })
+}
+
+// 封装2 图片上传 转码base64
+const tobase64=function(imageList){
+  return new Promise((resolve,reject)=>{
+    let base64Arr=[];  //装转码成base64之后的图片路径
+    if(imageList.length){
+      //开始转码
+      imageList.forEach(item=>{
+      wx.getFileSystemManager().readFile({
+        filePath:item ,     //选择图片的地址
+        encoding:"base64", //转码格式
+        success:(res)=>{
+          base64Arr.push(res.data); 
+          if(base64Arr.length>=imageList.length){
+            resolve(base64Arr);
+          }
+        }
+      })
+    })
+
+    }else{
+      wx.showToast({
+        title:'请选择图片',
+       })
+       return ;
+    }
+  })
+}
+  
+//上传文件到云存储
+const uploadCloud=function (base64Arr){
+  return new Promise((resolve,reject)=>{
+    let fileID=[]; //用来装云存储返回的fileID
+    base64Arr.forEach(item=>{
+      callfun("uploadFile",{
+        base64Data:item
+      })
+      .then(res=>{
+        // res就是图片上传成功后云函数返回的fileID
+        fileID.push(res.result.fileID);
+        if(fileID.length>=base64Arr.length){
+          resolve(fileID);
+        }
+      })
+    })
+  })
+
+}
+
+
+// 暴露(导出)
+module.exports={
+  find,
+  _,
+  callfun,
+  tobase64,
+  uploadCloud
+}
